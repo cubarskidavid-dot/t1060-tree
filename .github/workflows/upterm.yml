@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y gperf bison flex libxml2-utils xsltproc zip curl zlib1g-dev libncurses5-dev liblz4-tool lib32z1 lib32ncurses5 lib32stdc++6 libc6:i386 libz1:i386
+          sudo apt-get install -y gperf bison flex libxml2-utils xsltproc zip curl zlib1g-dev libncurses5-dev liblz4-tool lib32z1 lib32ncurses6 lib32stdc++6 libc6:i386 libz1:i386
 
       - name: Instalar Python 2.7 (Pacotes .deb)
         run: |
