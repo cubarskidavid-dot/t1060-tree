@@ -3,6 +3,10 @@ name: Tmate
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   tmate:
     runs-on: ubuntu-latest
@@ -13,17 +17,30 @@ jobs:
 
       - name: Install tmate static
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p "$HOME/.local/bin"
           curl -fsSL -o /tmp/tmate.tar.xz \
             https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-amd64.tar.xz
           tar -xJf /tmp/tmate.tar.xz -C "$HOME/.local/bin" --strip-components=1
           chmod +x "$HOME/.local/bin/tmate"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/tmate" -V
+          tmate -V
 
-      - name: Start tmate session
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: false
-          install-dependencies: false
+      - name: Start tmate
+        run: |
+          set -euo pipefail
+          tmate -S /tmp/tmate.sock new-session -d
+          timeout 90 tmate -S /tmp/tmate.sock wait tmate-ready
+          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' | tee /tmp/tmate_ssh
+
+      - name: Publish tmate command
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "tmate session $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --body "$(cat /tmp/tmate_ssh)"
+
+      - name: Keep session alive
+        run: sleep 21600
