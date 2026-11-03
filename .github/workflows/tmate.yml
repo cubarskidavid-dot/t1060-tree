@@ -1,0 +1,17 @@
+name: Tmate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tmate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
