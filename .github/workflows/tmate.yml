@@ -11,6 +11,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install tmate static
+        run: |
+          set -e
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o /tmp/tmate.tar.xz \
+            https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-amd64.tar.xz
+          tar -xJf /tmp/tmate.tar.xz -C "$HOME/.local/bin" --strip-components=1
+          chmod +x "$HOME/.local/bin/tmate"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/tmate" -V
+
       - name: Start tmate session
         uses: mxschmitt/action-tmate@v3
         with:
