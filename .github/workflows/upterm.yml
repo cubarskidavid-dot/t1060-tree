@@ -35,13 +35,6 @@ jobs:
           sudo dpkg -i --force-depends *.deb
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
 
-      - name: Criar Swap de 8GB
-        run: |
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          free -h
 
       - name: Preparar Ambiente (Repo, Sync e Tree)
         run: |
