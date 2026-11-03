@@ -1,4 +1,4 @@
-name: Tmate
+name: Upterm
 
 on:
   workflow_dispatch:
@@ -8,39 +8,29 @@ permissions:
   issues: write
 
 jobs:
-  tmate:
+  shell:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install tmate static
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o /tmp/tmate.tar.xz \
-            https://github.com/tmate-io/tmate/releases/download/2.4.0/tmate-2.4.0-static-linux-amd64.tar.xz
-          tar -xJf /tmp/tmate.tar.xz -C "$HOME/.local/bin" --strip-components=1
-          chmod +x "$HOME/.local/bin/tmate"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          tmate -V
+      - name: Start upterm session
+        id: upterm
+        uses: owenthereal/action-upterm@v2
+        with:
+          detached: true
+          limit-access-to-actor: false
+          wait-timeout-minutes: 360
 
-      - name: Start tmate
-        run: |
-          set -euo pipefail
-          tmate -S /tmp/tmate.sock new-session -d
-          timeout 90 tmate -S /tmp/tmate.sock wait tmate-ready
-          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' | tee /tmp/tmate_ssh
-
-      - name: Publish tmate command
+      - name: Publish session command
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh issue create \
             --repo "$GITHUB_REPOSITORY" \
-            --title "tmate session $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --body "$(cat /tmp/tmate_ssh)"
+            --title "upterm session $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --body "${{ steps.upterm.outputs.ssh-command }}"
 
       - name: Keep session alive
         run: sleep 21600
