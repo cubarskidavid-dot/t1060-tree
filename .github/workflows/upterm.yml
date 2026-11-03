@@ -1,19 +1,88 @@
-name: Upterm
+name: Upterm Prep & Build T1060
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
   shell:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Liberar Espaço em Disco
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache /usr/share/dotnet /usr/share/swift /usr/local/share/boost /usr/local/.ghcup /opt/az
+          sudo apt-get clean
+          df -h "$HOME"
+
+      - name: Instalar Dependências e Libs 32-bits
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y gperf bison flex libxml2-utils xsltproc zip curl zlib1g-dev libncurses5-dev liblz4-tool lib32z1 lib32ncurses5 lib32stdc++6 libc6:i386 libz1:i386
+
+      - name: Instalar Python 2.7 (Pacotes .deb)
+        run: |
+          wget -q http://archive.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
+          wget -q http://security.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7-minimal_2.7.18-13ubuntu1.5_amd64.deb
+          wget -q http://archive.ubuntu.com/ubuntu/pool/universe/p/python-defaults/python2-minimal_2.7.18-3_amd64.deb
+          sudo dpkg -i --force-depends *.deb
+          sudo ln -sf /usr/bin/python2.7 /usr/bin/python
+
+      - name: Criar Swap de 8GB
+        run: |
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Preparar Ambiente (Repo, Sync e Tree)
+        run: |
+          export PATH="$HOME/bin:$PATH"
+          mkdir -p "$HOME/bin"
+          command -v repo >/dev/null || curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo > "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          git config --global user.name "t1060"
+          git config --global user.email "t1060@localhost"
+          
+          mkdir -p "$HOME/cm-12.1"
+          cd "$HOME/cm-12.1"
+          repo init -u https://github.com/CyanogenMod/android.git -b cm-12.1 --depth=1
+          repo sync -c -j4 --no-clone-bundle --no-tags --optimized-fetch
+          
+          ZIP=$(find /home/runner/work -name t1060-tree.zip -print -quit)
+          if [ -n "$ZIP" ]; then unzip -o "$ZIP" -d "$HOME/cm-12.1"; fi
+          
+          # Corrige caminho do brunch
+          mkdir -p device/positivo/t1060
+          echo '$(call inherit-product, device/positivo/t1060/cm_t1060.mk)' > device/positivo/t1060/cm.mk
+
+      - name: Aplicar Patches e Configurar Java 8
+        run: |
+          cd "$HOME/cm-12.1"
+          rm -rf "$HOME/jdk" && mkdir -p "$HOME/jdk"
+          curl -fsSL -o "$HOME/jdk/jdk8.tar.gz" https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u422-b05/OpenJDK8U-jdk_x64_linux_hotspot_8u422b05.tar.gz
+          tar -xzf "$HOME/jdk/jdk8.tar.gz" -C "$HOME/jdk"
+          export JAVA_HOME="$HOME/jdk/jdk8u422-b05"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          
+          # Patches de compatibilidade
+          sed -i 's/1\.7/1.8/g' build/core/main.mk
+          sed -i 's/print r/print(r)/' build/tools/findleaves.py
+          sed -i 's/return type get(new MapEntry(enumMap.keys\[prePosition\]));/return (E) get(new MapEntry(enumMap.keys[prePosition]));/g' libcore/luni/src/main/java/java/util/EnumMap.java
+          sed -i 's/next(\(.*\)\.values())/next(iter(\1.values()))/g' external/chromium_org/third_party/WebKit/Source/bindings/scripts/interface_dependency_resolver.py
+          
+          # Cria os arquivos .pak vazios para o WebKit não chorar
+          mkdir -p out/target/product/t1060/obj/GYP/shared_intermediates/content/app/strings/
+          for i in {a..z}; do for j in {a..z}; do touch out/target/product/t1060/obj/GYP/shared_intermediates/content/app/strings/content_strings_${i}${j}.pak; done; touch out/target/product/t1060/obj/GYP/shared_intermediates/content/app/strings/content_strings_${i}.pak; done
+          for loc in en_US pt_BR zh_CN zh_TW en-GB es-419; do touch out/target/product/t1060/obj/GYP/shared_intermediates/content/app/strings/content_strings_$loc.pak; done
 
       - name: Start upterm session
         id: upterm
@@ -21,6 +90,7 @@ jobs:
         with:
           detached: true
           limit-access-to-actor: false
+          allow-exec: true # AGORA VOCÊ PODE MATAR PROCESSOS TRAVADOS VIA SSH!
           wait-timeout-minutes: 360
 
       - name: Publish session command
@@ -30,7 +100,11 @@ jobs:
           gh issue create \
             --repo "$GITHUB_REPOSITORY" \
             --title "upterm session $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --body "${{ steps.upterm.outputs.ssh-command }}"
+            --body "Sessão pronta! O ambiente tá 100%. Entre e rode o guia.
+            Comando SSH:
+            \`\`\`
+            ${{ steps.upterm.outputs.ssh-command }}
+            \`\`\`"
 
       - name: Keep session alive
         run: sleep 21600
